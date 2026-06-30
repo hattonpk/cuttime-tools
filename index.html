@@ -242,11 +242,36 @@
       margin-top: 0;
       margin-bottom: 10px;
     }
+
+    .app-title-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 12px;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .app-title-row h1 {
+      margin: 0;
+    }
+
+    .app-meta {
+      font-size: .84rem;
+      color: #555;
+      line-height: 1.3;
+    }
   </style>
 </head>
 <body>
   <main>
-    <h1>CutTime QR Inspection Collector</h1>
+    <div class="app-title-row">
+      <h1>CutTime QR Inspection Collector</h1>
+      <div class="app-meta">
+        App <strong id="appVersionLabel"></strong><br>
+        Data <strong id="dataVersionLabel">none loaded</strong>
+      </div>
+    </div>
 
     <section class="card" id="setupSection">
       <div class="section-header">
@@ -277,19 +302,25 @@
             <input id="orgId" value="e3ccb7f1-6d23-4ee7-a8fb-31b3e8383c0e">
           </div>
           <div>
-            <label>Cached mapping</label>
-            <div id="mappingStatus" class="muted-box small">Loading cache...</div>
+            <label for="dataVersionInput">Data label/version</label>
+            <input id="dataVersionInput" placeholder="Optional, e.g. Full export 2026-06-30">
           </div>
         </div>
 
-        <div class="grid two">
+        <div style="margin-top:10px;">
+          <label>Cached mapping</label>
+          <div id="mappingStatus" class="muted-box small">Loading cache...</div>
+        </div>
+
+        <div class="grid three">
           <button id="reloadCacheBtn" class="secondary">Reload Cached Mapping</button>
+          <button id="persistCacheBtn" class="secondary">Protect Cached Mapping</button>
           <button id="clearCacheBtn" class="danger">Clear Cached Mapping</button>
         </div>
 
         <p class="small">
           This version reads the CutTime .xlsx export directly. It also still accepts CSV/TSV and published Google Sheet CSV links.
-          The mapping is cached locally in this browser, so the full export does not need to be baked into the code.
+          The mapping is cached locally in this browser with a stored data label/version. Use Protect Cached Mapping to ask the browser to avoid clearing it automatically.
         </p>
       </div>
     </section>
@@ -364,6 +395,10 @@
   </main>
 
   <script>
+    const APP_VERSION = "1.6.0";
+    const APP_RELEASE = "2026-06-30";
+    const CACHE_FORMAT_VERSION = "cuttime-export-map-v1";
+
     const DB_NAME = "cuttimeQrCollectorXlsx";
     const DB_VERSION = 1;
     const STORE_NAME = "instrumentMap";
@@ -376,9 +411,11 @@
     const mappingStatus = document.getElementById("mappingStatus");
     const mappingFile = document.getElementById("mappingFile");
     const loadFileBtn = document.getElementById("loadFileBtn");
+    const dataVersionInput = document.getElementById("dataVersionInput");
     const csvUrl = document.getElementById("csvUrl");
     const loadUrlBtn = document.getElementById("loadUrlBtn");
     const reloadCacheBtn = document.getElementById("reloadCacheBtn");
+    const persistCacheBtn = document.getElementById("persistCacheBtn");
     const clearCacheBtn = document.getElementById("clearCacheBtn");
     const orgIdInput = document.getElementById("orgId");
     const manualInput = document.getElementById("manualInput");
@@ -394,6 +431,8 @@
     const setupSummary = document.getElementById("setupSummary");
     const beepOnScan = document.getElementById("beepOnScan");
     const buzzOnScan = document.getElementById("buzzOnScan");
+    const appVersionLabel = document.getElementById("appVersionLabel");
+    const dataVersionLabel = document.getElementById("dataVersionLabel");
 
     let db = null;
     let uidMap = new Map();
@@ -473,6 +512,81 @@
       mappingStatus.textContent = message;
       setupSummary.className = "muted-box small setup-summary " + type;
       setupSummary.textContent = message;
+    }
+
+    function appVersionText() {
+      return `v${APP_VERSION} (${APP_RELEASE})`;
+    }
+
+    function formatAge(isoDate) {
+      if (!isoDate) return "";
+      const ms = Date.now() - new Date(isoDate).getTime();
+      if (!Number.isFinite(ms) || ms < 0) return "";
+      const days = Math.floor(ms / 86400000);
+      if (days === 0) return "today";
+      if (days === 1) return "1 day ago";
+      if (days < 60) return `${days} days ago`;
+      const months = Math.floor(days / 30);
+      return months === 1 ? "about 1 month ago" : `about ${months} months ago`;
+    }
+
+    async function storageStatusText() {
+      const parts = [];
+
+      try {
+        if (navigator.storage && navigator.storage.persisted) {
+          const persisted = await navigator.storage.persisted();
+          parts.push(`Protected storage: ${persisted ? "yes" : "no"}`);
+        } else {
+          parts.push("Protected storage: not supported");
+        }
+      } catch (err) {
+        parts.push("Protected storage: unknown");
+      }
+
+      try {
+        if (navigator.storage && navigator.storage.estimate) {
+          const estimate = await navigator.storage.estimate();
+          if (estimate.usage || estimate.quota) {
+            const usageMb = estimate.usage ? (estimate.usage / 1048576).toFixed(1) : "?";
+            const quotaMb = estimate.quota ? (estimate.quota / 1048576).toFixed(0) : "?";
+            parts.push(`Storage used/quota: ${usageMb} MB / ${quotaMb} MB`);
+          }
+        }
+      } catch (err) {}
+
+      return parts.join(". ");
+    }
+
+    function updateVersionLabels(dataLabel = "") {
+      appVersionLabel.textContent = appVersionText();
+      dataVersionLabel.textContent = dataLabel || "none loaded";
+    }
+
+    function buildDataLabel(sourceName) {
+      const manualLabel = dataVersionInput.value.trim();
+      const today = new Date().toISOString().slice(0, 10);
+      return manualLabel || `${sourceName} loaded ${today}`;
+    }
+
+    async function requestPersistentStorage() {
+      if (!navigator.storage || !navigator.storage.persist) {
+        setStatus("This browser does not support persistent storage requests.", "bad");
+        await loadCachedMapping();
+        return;
+      }
+
+      try {
+        const granted = await navigator.storage.persist();
+        if (granted) {
+          setStatus("Persistent storage granted. The browser should avoid evicting the cached mapping automatically.", "good");
+        } else {
+          setStatus("Persistent storage was not granted. The cache can still work, but the browser may clear it under storage pressure or when site data is cleared.", "bad");
+        }
+        await loadCachedMapping();
+      } catch (err) {
+        setStatus("Could not request persistent storage: " + err.message, "bad");
+      }
     }
 
     function setSetupCollapsed(collapsed) {
@@ -562,13 +676,24 @@
       uidMap = new Map(records.map(record => [record.publicUid, record]));
 
       const meta = await getMeta();
-      const loadedAt = meta.loadedAt ? new Date(meta.loadedAt).toLocaleString() : "unknown time";
+      const loadedAtDisplay = meta.loadedAt ? new Date(meta.loadedAt).toLocaleString() : "unknown time";
+      const age = formatAge(meta.loadedAt);
       const sourceName = meta.sourceName || "cached file";
+      const dataLabel = meta.dataLabel || "";
+      const loadedBy = meta.loadedByAppVersion ? ` Loaded by app v${meta.loadedByAppVersion}.` : "";
+      const formatVersion = meta.cacheFormatVersion ? ` Cache format: ${meta.cacheFormatVersion}.` : "";
+      const storageText = await storageStatusText();
+
+      updateVersionLabels(dataLabel);
 
       if (records.length) {
-        setMappingStatus(`${records.length.toLocaleString()} records loaded from cache. Source: ${sourceName}. Loaded: ${loadedAt}.`, "good");
+        const ageText = age ? ` (${age})` : "";
+        setMappingStatus(
+          `${records.length.toLocaleString()} records loaded from cache. Data: ${dataLabel || sourceName}. Source: ${sourceName}. Loaded: ${loadedAtDisplay}${ageText}.${loadedBy}${formatVersion} ${storageText}`,
+          "good"
+        );
       } else {
-        setMappingStatus("No cached mapping loaded yet.", "");
+        setMappingStatus(`No cached mapping loaded yet. App ${appVersionText()}. ${storageText}`, "");
       }
     }
 
@@ -576,6 +701,7 @@
       await clearStore(STORE_NAME);
       await clearStore(META_STORE);
       uidMap = new Map();
+      updateVersionLabels("");
       setMappingStatus("Cached mapping cleared.");
     }
 
@@ -1112,6 +1238,7 @@
     }
 
     async function loadMappingRows(rows, sourceName) {
+      const dataLabel = buildDataLabel(sourceName);
       setMappingStatus("Parsing mapping file...");
 
       const parsed = rowsToRecords(rows);
@@ -1126,7 +1253,11 @@
       await saveRecordsToIndexedDb(parsed.records);
       await putMeta("loadedAt", new Date().toISOString());
       await putMeta("sourceName", sourceName);
+      await putMeta("dataLabel", dataLabel);
       await putMeta("recordCount", parsed.records.length);
+      await putMeta("loadedByAppVersion", APP_VERSION);
+      await putMeta("appRelease", APP_RELEASE);
+      await putMeta("cacheFormatVersion", CACHE_FORMAT_VERSION);
 
       await loadCachedMapping();
 
@@ -1134,7 +1265,7 @@
         ? ` ${parsed.skippedRows.length} rows were skipped because no UID was found.`
         : "";
 
-      setStatus(`Mapping loaded: ${parsed.records.length.toLocaleString()} records.${skippedMessage}`, "good");
+      setStatus(`Mapping loaded: ${parsed.records.length.toLocaleString()} records. Data label: ${dataLabel}.${skippedMessage}`, "good");
     }
 
     async function loadSelectedFile() {
@@ -1213,6 +1344,8 @@
       const row = {
         scanNumber: results.length + 1,
         scannedAt: new Date().toISOString(),
+        appVersion: APP_VERSION,
+        dataLabel: dataVersionLabel.textContent === "none loaded" ? "" : dataVersionLabel.textContent,
         source,
         matched: !!match,
         qrUrl: parsed.qrUrl,
@@ -1308,6 +1441,8 @@
       const headers = [
         "scanNumber",
         "scannedAt",
+        "appVersion",
+        "dataLabel",
         "source",
         "matched",
         "qrUrl",
@@ -1346,7 +1481,7 @@
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
 
       link.href = URL.createObjectURL(blob);
-      link.download = `cuttime-inspection-scans-${timestamp}.csv`;
+      link.download = `cuttime-inspection-scans-v${APP_VERSION}-${timestamp}.csv`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -1505,6 +1640,7 @@
     loadFileBtn.addEventListener("click", loadSelectedFile);
     loadUrlBtn.addEventListener("click", loadPublishedCsvUrl);
     reloadCacheBtn.addEventListener("click", () => loadCachedMapping().catch(err => setStatus(err.message, "bad")));
+    persistCacheBtn.addEventListener("click", requestPersistentStorage);
     clearCacheBtn.addEventListener("click", () => clearCachedMapping().catch(err => setStatus(err.message, "bad")));
 
     manualBtn.addEventListener("click", () => {
@@ -1533,6 +1669,7 @@
     });
 
     async function init() {
+      updateVersionLabels("");
       initSetupCollapse();
 
       try {
