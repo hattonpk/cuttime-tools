@@ -1,1 +1,1353 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CutTime QR Inspection Collector</title>
+  <style>
+    :root {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #111;
+      background: #f5f5f5;
+    }
 
+    body {
+      margin: 0;
+      padding: 14px;
+      background: #f5f5f5;
+    }
+
+    main {
+      max-width: 980px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 1.35rem;
+      margin: 0 0 12px;
+    }
+
+    h2 {
+      font-size: 1.05rem;
+      margin: 0 0 10px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 14px;
+      padding: 14px;
+      box-shadow: 0 2px 12px rgba(0,0,0,.08);
+      margin-bottom: 14px;
+    }
+
+    video {
+      width: 100%;
+      border-radius: 12px;
+      background: #000;
+      display: block;
+      max-height: 46vh;
+      object-fit: cover;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px 13px;
+      border: 0;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 650;
+      margin-top: 10px;
+      background: #1a73e8;
+      color: white;
+    }
+
+    button.secondary {
+      background: #e8eaed;
+      color: #111;
+    }
+
+    button.danger {
+      background: #b3261e;
+      color: white;
+    }
+
+    button:disabled {
+      opacity: .55;
+    }
+
+    label {
+      font-weight: 650;
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    input, textarea {
+      width: 100%;
+      box-sizing: border-box;
+      font: inherit;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid #ccc;
+      background: white;
+    }
+
+    textarea {
+      min-height: 72px;
+      resize: vertical;
+    }
+
+    .status {
+      font-size: .95rem;
+      color: #555;
+      margin-top: 10px;
+      line-height: 1.35;
+    }
+
+    .good {
+      color: #137333;
+      font-weight: 650;
+    }
+
+    .bad {
+      color: #b3261e;
+      font-weight: 650;
+    }
+
+    .small {
+      font-size: .88rem;
+      color: #555;
+      line-height: 1.35;
+    }
+
+    .grid {
+      display: grid;
+      gap: 10px;
+    }
+
+    .grid.two, .grid.three {
+      grid-template-columns: 1fr;
+    }
+
+    @media (min-width: 720px) {
+      .grid.two {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .grid.three {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .86rem;
+    }
+
+    th, td {
+      border-bottom: 1px solid #ddd;
+      padding: 8px 6px;
+      text-align: left;
+      vertical-align: top;
+      white-space: nowrap;
+    }
+
+    th {
+      background: #f1f3f4;
+      font-weight: 700;
+      position: sticky;
+      top: 0;
+    }
+
+    td.url {
+      white-space: normal;
+      word-break: break-all;
+      min-width: 240px;
+    }
+
+    .pill {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: .78rem;
+      font-weight: 650;
+      background: #e8eaed;
+      color: #333;
+    }
+
+    .pill.ok {
+      background: #e6f4ea;
+      color: #137333;
+    }
+
+    .pill.fail {
+      background: #fce8e6;
+      color: #b3261e;
+    }
+
+    .muted-box {
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      padding: 10px;
+      background: #fafafa;
+    }
+
+    .checkbox-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 10px;
+    }
+
+    .checkbox-row input {
+      width: auto;
+    }
+
+    .checkbox-row label {
+      margin: 0;
+      font-weight: 500;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>CutTime QR Inspection Collector</h1>
+
+    <section class="card">
+      <h2>1. Mapping data</h2>
+
+      <div class="grid two">
+        <div>
+          <label for="mappingFile">Load CutTime export file</label>
+          <input id="mappingFile" type="file" accept=".xlsx,.csv,.tsv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/tab-separated-values">
+          <button id="loadFileBtn" class="secondary">Load Selected File</button>
+        </div>
+
+        <div>
+          <label for="csvUrl">Or load published Google Sheet CSV URL</label>
+          <input id="csvUrl" type="url" placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv">
+          <button id="loadUrlBtn" class="secondary">Load CSV From URL</button>
+        </div>
+      </div>
+
+      <div class="grid two" style="margin-top:10px;">
+        <div>
+          <label for="orgId">CutTime Org ID</label>
+          <input id="orgId" value="e3ccb7f1-6d23-4ee7-a8fb-31b3e8383c0e">
+        </div>
+        <div>
+          <label>Cached mapping</label>
+          <div id="mappingStatus" class="muted-box small">Loading cache...</div>
+        </div>
+      </div>
+
+      <div class="grid two">
+        <button id="reloadCacheBtn" class="secondary">Reload Cached Mapping</button>
+        <button id="clearCacheBtn" class="danger">Clear Cached Mapping</button>
+      </div>
+
+      <p class="small">
+        This version reads the CutTime .xlsx export directly. It also still accepts CSV/TSV and published Google Sheet CSV links.
+        The mapping is cached locally in this browser, so the full export does not need to be baked into the code.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>2. Scan or test</h2>
+
+      <video id="video" playsinline muted></video>
+      <div class="grid two">
+        <button id="startBtn">Start Scanner</button>
+        <button id="stopBtn" class="secondary" disabled>Stop Scanner</button>
+      </div>
+
+      <div style="height:12px;"></div>
+
+      <label for="manualInput">Testing/debug mode: paste QR URL</label>
+      <textarea id="manualInput" placeholder="Paste a CutTime QR URL here, then tap Process Pasted URL..."></textarea>
+      <button id="manualBtn" class="secondary">Process Pasted URL</button>
+
+      <div id="status" class="status">Ready.</div>
+    </section>
+
+    <section class="card">
+      <h2>3. Results</h2>
+
+      <div class="grid three">
+        <button id="exportBtn" class="secondary" disabled>Export Results CSV</button>
+        <button id="copyInspectionBtn" class="secondary" disabled>Copy Inspection URLs</button>
+        <button id="clearResultsBtn" class="danger" disabled>Clear Results</button>
+      </div>
+
+      <div class="checkbox-row">
+        <input type="checkbox" id="skipDuplicates" checked>
+        <label for="skipDuplicates">Skip duplicate scans</label>
+      </div>
+
+      <div class="table-wrap" style="margin-top:12px;">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Match</th>
+              <th>Type</th>
+              <th>Make/Model</th>
+              <th>Serial</th>
+              <th>Barcode</th>
+              <th>Managed by</th>
+              <th>Location</th>
+              <th>Condition</th>
+              <th>Public UID</th>
+              <th>Inspection URL</th>
+              <th>QR URL</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody">
+            <tr><td colspan="12" class="small">No scans yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const DB_NAME = "cuttimeQrCollectorXlsx";
+    const DB_VERSION = 1;
+    const STORE_NAME = "instrumentMap";
+    const META_STORE = "meta";
+
+    const video = document.getElementById("video");
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const statusEl = document.getElementById("status");
+    const mappingStatus = document.getElementById("mappingStatus");
+    const mappingFile = document.getElementById("mappingFile");
+    const loadFileBtn = document.getElementById("loadFileBtn");
+    const csvUrl = document.getElementById("csvUrl");
+    const loadUrlBtn = document.getElementById("loadUrlBtn");
+    const reloadCacheBtn = document.getElementById("reloadCacheBtn");
+    const clearCacheBtn = document.getElementById("clearCacheBtn");
+    const orgIdInput = document.getElementById("orgId");
+    const manualInput = document.getElementById("manualInput");
+    const manualBtn = document.getElementById("manualBtn");
+    const exportBtn = document.getElementById("exportBtn");
+    const copyInspectionBtn = document.getElementById("copyInspectionBtn");
+    const clearResultsBtn = document.getElementById("clearResultsBtn");
+    const skipDuplicates = document.getElementById("skipDuplicates");
+    const resultsBody = document.getElementById("resultsBody");
+
+    let db = null;
+    let uidMap = new Map();
+    let results = [];
+    let stream = null;
+    let detector = null;
+    let scanning = false;
+    let lastScanSeenAt = new Map();
+
+    function setStatus(message, type = "") {
+      statusEl.className = "status " + type;
+      statusEl.textContent = message;
+    }
+
+    function setMappingStatus(message, type = "") {
+      mappingStatus.className = "muted-box small " + type;
+      mappingStatus.textContent = message;
+    }
+
+    function openDb() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+        request.onupgradeneeded = () => {
+          const database = request.result;
+
+          if (!database.objectStoreNames.contains(STORE_NAME)) {
+            database.createObjectStore(STORE_NAME, { keyPath: "publicUid" });
+          }
+
+          if (!database.objectStoreNames.contains(META_STORE)) {
+            database.createObjectStore(META_STORE, { keyPath: "key" });
+          }
+        };
+
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    function getAllFromStore(storeName) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, "readonly");
+        const store = tx.objectStore(storeName);
+        const request = store.getAll();
+
+        request.onsuccess = () => resolve(request.result || []);
+        request.onerror = () => reject(request.error);
+      });
+    }
+
+    function putMeta(key, value) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(META_STORE, "readwrite");
+        tx.objectStore(META_STORE).put({ key, value });
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+
+    async function getMeta() {
+      const rows = await getAllFromStore(META_STORE);
+      const meta = {};
+      for (const row of rows) meta[row.key] = row.value;
+      return meta;
+    }
+
+    function clearStore(storeName) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(storeName, "readwrite");
+        tx.objectStore(storeName).clear();
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+
+    function saveRecordsToIndexedDb(records) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, "readwrite");
+        const store = tx.objectStore(STORE_NAME);
+
+        for (const record of records) {
+          store.put(record);
+        }
+
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+
+    async function loadCachedMapping() {
+      const records = await getAllFromStore(STORE_NAME);
+      uidMap = new Map(records.map(record => [record.publicUid, record]));
+
+      const meta = await getMeta();
+      const loadedAt = meta.loadedAt ? new Date(meta.loadedAt).toLocaleString() : "unknown time";
+      const sourceName = meta.sourceName || "cached file";
+
+      if (records.length) {
+        setMappingStatus(`${records.length.toLocaleString()} records loaded from cache. Source: ${sourceName}. Loaded: ${loadedAt}.`, "good");
+      } else {
+        setMappingStatus("No cached mapping loaded yet.", "");
+      }
+    }
+
+    async function clearCachedMapping() {
+      await clearStore(STORE_NAME);
+      await clearStore(META_STORE);
+      uidMap = new Map();
+      setMappingStatus("Cached mapping cleared.");
+    }
+
+    function normalizeHeader(value) {
+      return String(value || "")
+        .toLowerCase()
+        .replace(/#/g, "number")
+        .replace(/&/g, "and")
+        .replace(/[^a-z0-9]+/g, "");
+    }
+
+    function getByHeader(rowObj, possibleHeaders) {
+      for (const header of possibleHeaders) {
+        const key = normalizeHeader(header);
+        if (rowObj[key] !== undefined && rowObj[key] !== null) {
+          return String(rowObj[key]).trim();
+        }
+      }
+      return "";
+    }
+
+    function extractUuid(text) {
+      const match = String(text || "").match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+      return match ? match[0].toLowerCase() : "";
+    }
+
+    function extractUrl(text) {
+      if (!text) return "";
+      const cleaned = String(text).trim();
+
+      try {
+        const direct = new URL(cleaned);
+        if (direct.protocol === "http:" || direct.protocol === "https:") {
+          return direct.href;
+        }
+      } catch (e) {}
+
+      const match = cleaned.match(/https?:\/\/[^\s<>"']+/i);
+      if (match) {
+        try {
+          return new URL(match[0]).href;
+        } catch (e) {}
+      }
+
+      return "";
+    }
+
+    function parseCutTimeQrUrl(rawText) {
+      const urlText = extractUrl(rawText);
+
+      if (!urlText) {
+        return {
+          ok: false,
+          error: "No valid URL found."
+        };
+      }
+
+      const url = new URL(urlText);
+      const parts = url.pathname.split("/").filter(Boolean);
+      let publicUid = "";
+
+      if (url.hostname === "app.gocuttime.com" && parts[0] === "public" && parts[1] === "instruments") {
+        publicUid = extractUuid(parts[2] || "");
+      }
+
+      if (!publicUid) {
+        publicUid = extractUuid(url.href);
+      }
+
+      return {
+        ok: !!publicUid,
+        qrUrl: url.href,
+        domain: url.hostname,
+        publicUid,
+        error: publicUid ? "" : "URL found, but no UUID was found in it."
+      };
+    }
+
+    function makeModel(make, model) {
+      return [make, model].filter(Boolean).join(" ").trim();
+    }
+
+    function normalizeRecord(rowObj) {
+      const id = getByHeader(rowObj, ["ID", "Instrument ID", "Public UID", "Public Instrument UID", "CutTime ID"]);
+      const landingUrl = getByHeader(rowObj, ["QR code landing page URL", "QR Landing Page URL", "Landing Page URL", "Public URL"]);
+      const qrImageUrl = getByHeader(rowObj, ["QR code image URL", "QR Image URL"]);
+      const anyUid = extractUuid(id) || extractUuid(landingUrl) || extractUuid(qrImageUrl);
+
+      if (!anyUid) return null;
+
+      const type = getByHeader(rowObj, ["Type", "Instrument", "Instrument type"]);
+      const make = getByHeader(rowObj, ["Make"]);
+      const model = getByHeader(rowObj, ["Model"]);
+      const serial = getByHeader(rowObj, ["Serial #", "Serial Number", "Serial"]);
+      const caseId = getByHeader(rowObj, ["Case ID", "Case"]);
+      const barcode = getByHeader(rowObj, ["Barcode"]);
+      const ownerName = getByHeader(rowObj, ["Owner name", "Owner"]);
+      const ownerId = getByHeader(rowObj, ["Owner ID"]);
+      const managedBy = getByHeader(rowObj, ["Managed by", "Managed By", "School", "Assigned School"]);
+      const location = getByHeader(rowObj, ["Location"]);
+      const condition = getByHeader(rowObj, ["Condition"]);
+      const conditionComment = getByHeader(rowObj, ["Condition comment", "Condition Comment", "Comment"]);
+      const latestInspectionDate = getByHeader(rowObj, ["Latest inspection date", "Latest Inspection Date"]);
+      const status = getByHeader(rowObj, ["Status"]);
+      const assignedFirst = getByHeader(rowObj, ["Assigned member first name", "Assigned First Name", "First Name"]);
+      const assignedLast = getByHeader(rowObj, ["Assigned member last name", "Assigned Last Name", "Last Name"]);
+      const allAssignees = getByHeader(rowObj, ["All current assignee names", "Current assignee names", "Assignee"]);
+      const email = getByHeader(rowObj, ["Email", "Teacher Email", "Assigned member email", "Manager Email"]);
+      const inventoryUid = getByHeader(rowObj, ["Inventory ID", "Inventory UID", "Internal inventory ID"]) || anyUid;
+
+      return {
+        publicUid: anyUid.toLowerCase(),
+        inventoryUid: extractUuid(inventoryUid) || inventoryUid,
+        landingUrl,
+        qrImageUrl,
+        type,
+        make,
+        model,
+        makeModel: makeModel(make, model),
+        serial,
+        caseId,
+        barcode,
+        ownerName,
+        ownerId,
+        managedBy,
+        location,
+        condition,
+        conditionComment,
+        latestInspectionDate,
+        status,
+        assignedFirst,
+        assignedLast,
+        allAssignees,
+        email
+      };
+    }
+
+    function rowsToRecords(rows) {
+      if (!rows || rows.length < 2) {
+        throw new Error("The file does not appear to contain a header row and data rows.");
+      }
+
+      const rawHeaders = rows[0].map(h => String(h || "").trim());
+      const normalizedHeaders = rawHeaders.map(normalizeHeader);
+      const records = [];
+      const skippedRows = [];
+
+      for (let i = 1; i < rows.length; i++) {
+        const cells = rows[i] || [];
+        const rowObj = {};
+
+        for (let c = 0; c < normalizedHeaders.length; c++) {
+          rowObj[normalizedHeaders[c]] = cells[c] ?? "";
+        }
+
+        const record = normalizeRecord(rowObj);
+
+        if (record) {
+          records.push(record);
+        } else {
+          skippedRows.push(i + 1);
+        }
+      }
+
+      const unique = new Map();
+      for (const record of records) {
+        unique.set(record.publicUid, record);
+      }
+
+      return {
+        records: Array.from(unique.values()),
+        headers: rawHeaders,
+        skippedRows
+      };
+    }
+
+    function detectDelimiter(text) {
+      const firstLine = (text.match(/^[^\r\n]*/) || [""])[0];
+      const commaCount = (firstLine.match(/,/g) || []).length;
+      const tabCount = (firstLine.match(/\t/g) || []).length;
+      return tabCount > commaCount ? "\t" : ",";
+    }
+
+    function parseDelimited(text, delimiter) {
+      const rows = [];
+      let row = [];
+      let field = "";
+      let inQuotes = false;
+
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        const next = text[i + 1];
+
+        if (inQuotes) {
+          if (char === '"' && next === '"') {
+            field += '"';
+            i++;
+          } else if (char === '"') {
+            inQuotes = false;
+          } else {
+            field += char;
+          }
+        } else {
+          if (char === '"') {
+            inQuotes = true;
+          } else if (char === delimiter) {
+            row.push(field);
+            field = "";
+          } else if (char === "\n") {
+            row.push(field);
+            rows.push(row);
+            row = [];
+            field = "";
+          } else if (char === "\r") {
+            // Ignore CR. LF closes the row.
+          } else {
+            field += char;
+          }
+        }
+      }
+
+      row.push(field);
+      rows.push(row);
+
+      return rows.filter(r => r.some(c => String(c || "").trim() !== ""));
+    }
+
+    function textToRows(text) {
+      return parseDelimited(text, detectDelimiter(text));
+    }
+
+    function readFileAsText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(file);
+      });
+    }
+
+    function readFileAsArrayBuffer(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsArrayBuffer(file);
+      });
+    }
+
+    function u16(view, offset) {
+      return view.getUint16(offset, true);
+    }
+
+    function u32(view, offset) {
+      return view.getUint32(offset, true);
+    }
+
+    async function decompressZipData(bytes, method) {
+      if (method === 0) {
+        return bytes;
+      }
+
+      if (method !== 8) {
+        throw new Error("Unsupported XLSX compression method: " + method);
+      }
+
+      if (!("DecompressionStream" in window)) {
+        throw new Error("This browser cannot decompress XLSX files directly. Try Chrome/Edge, or use CSV as a fallback.");
+      }
+
+      async function tryFormat(format) {
+        const ds = new DecompressionStream(format);
+        const stream = new Blob([bytes]).stream().pipeThrough(ds);
+        const buffer = await new Response(stream).arrayBuffer();
+        return new Uint8Array(buffer);
+      }
+
+      try {
+        return await tryFormat("deflate-raw");
+      } catch (rawErr) {
+        return await tryFormat("deflate");
+      }
+    }
+
+    function parseZipEntries(arrayBuffer) {
+      const view = new DataView(arrayBuffer);
+      const bytes = new Uint8Array(arrayBuffer);
+      const decoder = new TextDecoder("utf-8");
+      const minEocd = 22;
+      const maxComment = 65535;
+      const searchStart = Math.max(0, bytes.length - minEocd - maxComment);
+      let eocd = -1;
+
+      for (let i = bytes.length - minEocd; i >= searchStart; i--) {
+        if (u32(view, i) === 0x06054b50) {
+          eocd = i;
+          break;
+        }
+      }
+
+      if (eocd < 0) {
+        throw new Error("Could not find XLSX ZIP directory.");
+      }
+
+      const totalEntries = u16(view, eocd + 10);
+      const centralDirectorySize = u32(view, eocd + 12);
+      const centralDirectoryOffset = u32(view, eocd + 16);
+      const entries = new Map();
+      let offset = centralDirectoryOffset;
+
+      for (let i = 0; i < totalEntries && offset < centralDirectoryOffset + centralDirectorySize; i++) {
+        if (u32(view, offset) !== 0x02014b50) {
+          throw new Error("Invalid XLSX ZIP directory entry.");
+        }
+
+        const method = u16(view, offset + 10);
+        const compressedSize = u32(view, offset + 20);
+        const uncompressedSize = u32(view, offset + 24);
+        const fileNameLength = u16(view, offset + 28);
+        const extraLength = u16(view, offset + 30);
+        const commentLength = u16(view, offset + 32);
+        const localHeaderOffset = u32(view, offset + 42);
+        const nameBytes = bytes.slice(offset + 46, offset + 46 + fileNameLength);
+        const name = decoder.decode(nameBytes);
+
+        if (u32(view, localHeaderOffset) !== 0x04034b50) {
+          throw new Error("Invalid XLSX ZIP local file entry.");
+        }
+
+        const localNameLength = u16(view, localHeaderOffset + 26);
+        const localExtraLength = u16(view, localHeaderOffset + 28);
+        const dataStart = localHeaderOffset + 30 + localNameLength + localExtraLength;
+        const dataEnd = dataStart + compressedSize;
+        const compressedBytes = bytes.slice(dataStart, dataEnd);
+
+        entries.set(name, {
+          name,
+          method,
+          compressedSize,
+          uncompressedSize,
+          compressedBytes,
+          textCache: null,
+          bytesCache: null
+        });
+
+        offset += 46 + fileNameLength + extraLength + commentLength;
+      }
+
+      return entries;
+    }
+
+    async function getZipEntryBytes(entries, name) {
+      const entry = entries.get(name);
+      if (!entry) {
+        throw new Error("Missing XLSX file part: " + name);
+      }
+
+      if (entry.bytesCache) {
+        return entry.bytesCache;
+      }
+
+      entry.bytesCache = await decompressZipData(entry.compressedBytes, entry.method);
+      return entry.bytesCache;
+    }
+
+    async function getZipEntryText(entries, name) {
+      const entry = entries.get(name);
+      if (!entry) {
+        throw new Error("Missing XLSX file part: " + name);
+      }
+
+      if (entry.textCache !== null) {
+        return entry.textCache;
+      }
+
+      const bytes = await getZipEntryBytes(entries, name);
+      entry.textCache = new TextDecoder("utf-8").decode(bytes);
+      return entry.textCache;
+    }
+
+    function parseXml(text, label) {
+      const doc = new DOMParser().parseFromString(text, "application/xml");
+      const error = doc.getElementsByTagName("parsererror")[0];
+
+      if (error) {
+        throw new Error("Could not parse XLSX XML part: " + label);
+      }
+
+      return doc;
+    }
+
+    function getRelAttr(node, name) {
+      return node.getAttribute(name) || "";
+    }
+
+    function resolveWorkbookSheetPath(workbookXml, relsXml, entries) {
+      try {
+        const workbook = parseXml(workbookXml, "xl/workbook.xml");
+        const rels = parseXml(relsXml, "xl/_rels/workbook.xml.rels");
+        const firstSheet = workbook.getElementsByTagName("sheet")[0];
+
+        if (firstSheet) {
+          const relId =
+            firstSheet.getAttribute("r:id") ||
+            firstSheet.getAttributeNS("http://schemas.openxmlformats.org/officeDocument/2006/relationships", "id");
+
+          if (relId) {
+            const relationships = Array.from(rels.getElementsByTagName("Relationship"));
+            const match = relationships.find(r => getRelAttr(r, "Id") === relId);
+
+            if (match) {
+              let target = getRelAttr(match, "Target");
+
+              if (target.startsWith("/")) {
+                target = target.slice(1);
+              } else if (!target.startsWith("xl/")) {
+                target = "xl/" + target;
+              }
+
+              if (entries.has(target)) {
+                return target;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        // Fall back below.
+      }
+
+      const firstWorksheet = Array.from(entries.keys()).find(name => /^xl\/worksheets\/sheet\d+\.xml$/i.test(name));
+
+      if (!firstWorksheet) {
+        throw new Error("No worksheet was found in the XLSX file.");
+      }
+
+      return firstWorksheet;
+    }
+
+    function parseSharedStrings(sharedStringsXml) {
+      if (!sharedStringsXml) return [];
+
+      const doc = parseXml(sharedStringsXml, "xl/sharedStrings.xml");
+      const items = Array.from(doc.getElementsByTagName("si"));
+
+      return items.map(si => {
+        const textNodes = Array.from(si.getElementsByTagName("t"));
+        if (textNodes.length) {
+          return textNodes.map(t => t.textContent || "").join("");
+        }
+        return si.textContent || "";
+      });
+    }
+
+    function columnIndexFromCellRef(ref) {
+      const letters = String(ref || "").match(/[A-Z]+/i);
+      if (!letters) return 0;
+
+      let index = 0;
+      const text = letters[0].toUpperCase();
+
+      for (let i = 0; i < text.length; i++) {
+        index = index * 26 + (text.charCodeAt(i) - 64);
+      }
+
+      return index - 1;
+    }
+
+    function getFirstChildText(node, tagName) {
+      const child = node.getElementsByTagName(tagName)[0];
+      return child ? child.textContent || "" : "";
+    }
+
+    function parseWorksheetRows(sheetXml, sharedStrings) {
+      const doc = parseXml(sheetXml, "worksheet");
+      const rowNodes = Array.from(doc.getElementsByTagName("row"));
+      const rows = [];
+
+      for (let fallbackRowIndex = 0; fallbackRowIndex < rowNodes.length; fallbackRowIndex++) {
+        const rowNode = rowNodes[fallbackRowIndex];
+        const rowNumber = parseInt(rowNode.getAttribute("r") || "", 10);
+        const rowIndex = Number.isFinite(rowNumber) && rowNumber > 0 ? rowNumber - 1 : fallbackRowIndex;
+        const row = rows[rowIndex] || [];
+        const cells = Array.from(rowNode.getElementsByTagName("c"));
+
+        for (const cell of cells) {
+          const ref = cell.getAttribute("r") || "";
+          const colIndex = columnIndexFromCellRef(ref);
+          const type = cell.getAttribute("t") || "";
+          let value = "";
+
+          if (type === "inlineStr") {
+            const inline = cell.getElementsByTagName("is")[0];
+            value = inline ? inline.textContent || "" : "";
+          } else {
+            value = getFirstChildText(cell, "v");
+
+            if (type === "s") {
+              value = sharedStrings[parseInt(value || "0", 10)] || "";
+            } else if (type === "b") {
+              value = value === "1" ? "TRUE" : "FALSE";
+            }
+          }
+
+          row[colIndex] = String(value ?? "");
+        }
+
+        rows[rowIndex] = row;
+      }
+
+      return rows.filter(row => row && row.some(cell => String(cell || "").trim() !== ""));
+    }
+
+    async function xlsxFileToRows(file) {
+      const arrayBuffer = await readFileAsArrayBuffer(file);
+      const entries = parseZipEntries(arrayBuffer);
+
+      const workbookXml = entries.has("xl/workbook.xml")
+        ? await getZipEntryText(entries, "xl/workbook.xml")
+        : "";
+
+      const relsXml = entries.has("xl/_rels/workbook.xml.rels")
+        ? await getZipEntryText(entries, "xl/_rels/workbook.xml.rels")
+        : "";
+
+      const sheetPath = resolveWorkbookSheetPath(workbookXml, relsXml, entries);
+      const sharedStringsXml = entries.has("xl/sharedStrings.xml")
+        ? await getZipEntryText(entries, "xl/sharedStrings.xml")
+        : "";
+
+      const sharedStrings = parseSharedStrings(sharedStringsXml);
+      const sheetXml = await getZipEntryText(entries, sheetPath);
+
+      return parseWorksheetRows(sheetXml, sharedStrings);
+    }
+
+    async function loadMappingRows(rows, sourceName) {
+      setMappingStatus("Parsing mapping file...");
+
+      const parsed = rowsToRecords(rows);
+
+      if (!parsed.records.length) {
+        throw new Error("No usable instrument UID records were found. Check that the file includes ID or QR code landing page URL.");
+      }
+
+      setMappingStatus(`Saving ${parsed.records.length.toLocaleString()} records locally...`);
+
+      await clearStore(STORE_NAME);
+      await saveRecordsToIndexedDb(parsed.records);
+      await putMeta("loadedAt", new Date().toISOString());
+      await putMeta("sourceName", sourceName);
+      await putMeta("recordCount", parsed.records.length);
+
+      await loadCachedMapping();
+
+      const skippedMessage = parsed.skippedRows.length
+        ? ` ${parsed.skippedRows.length} rows were skipped because no UID was found.`
+        : "";
+
+      setStatus(`Mapping loaded: ${parsed.records.length.toLocaleString()} records.${skippedMessage}`, "good");
+    }
+
+    async function loadSelectedFile() {
+      const file = mappingFile.files && mappingFile.files[0];
+
+      if (!file) {
+        setStatus("Select an .xlsx, CSV, or TSV file first.", "bad");
+        return;
+      }
+
+      try {
+        setMappingStatus("Reading file...");
+
+        let rows;
+
+        if (/\.xlsx$/i.test(file.name) || file.type.includes("spreadsheetml")) {
+          rows = await xlsxFileToRows(file);
+        } else {
+          const text = await readFileAsText(file);
+          rows = textToRows(text);
+        }
+
+        await loadMappingRows(rows, file.name);
+      } catch (err) {
+        setStatus("Could not load mapping file: " + err.message, "bad");
+      }
+    }
+
+    async function loadPublishedCsvUrl() {
+      const url = csvUrl.value.trim();
+
+      if (!url) {
+        setStatus("Paste a published CSV URL first.", "bad");
+        return;
+      }
+
+      try {
+        setMappingStatus("Fetching published CSV...");
+        const response = await fetch(url, { method: "GET", redirect: "follow" });
+
+        if (!response.ok) {
+          throw new Error("HTTP " + response.status);
+        }
+
+        const text = await response.text();
+        await loadMappingRows(textToRows(text), url);
+      } catch (err) {
+        setStatus("Could not load CSV URL. This may be a permissions or CORS issue: " + err.message, "bad");
+      }
+    }
+
+    function buildInspectionUrl(inventoryUid) {
+      const orgId = orgIdInput.value.trim();
+
+      if (!orgId || !inventoryUid) return "";
+
+      return `https://app.gocuttime.com/orgs/${orgId}/inventory/${inventoryUid}/inspections/new`;
+    }
+
+    async function processQrText(rawText, source) {
+      const parsed = parseCutTimeQrUrl(rawText);
+
+      if (!parsed.ok) {
+        setStatus(parsed.error, "bad");
+        return;
+      }
+
+      if (skipDuplicates.checked && results.some(r => r.publicUid === parsed.publicUid)) {
+        setStatus("Duplicate skipped: " + parsed.publicUid, "bad");
+        return;
+      }
+
+      const match = uidMap.get(parsed.publicUid) || null;
+      const inspectionUrl = match ? buildInspectionUrl(match.inventoryUid || parsed.publicUid) : "";
+
+      const row = {
+        scanNumber: results.length + 1,
+        scannedAt: new Date().toISOString(),
+        source,
+        matched: !!match,
+        qrUrl: parsed.qrUrl,
+        publicUid: parsed.publicUid,
+        inventoryUid: match ? match.inventoryUid : "",
+        inspectionUrl,
+        type: match ? match.type : "",
+        make: match ? match.make : "",
+        model: match ? match.model : "",
+        makeModel: match ? match.makeModel : "",
+        serial: match ? match.serial : "",
+        caseId: match ? match.caseId : "",
+        barcode: match ? match.barcode : "",
+        ownerName: match ? match.ownerName : "",
+        ownerId: match ? match.ownerId : "",
+        managedBy: match ? match.managedBy : "",
+        location: match ? match.location : "",
+        condition: match ? match.condition : "",
+        conditionComment: match ? match.conditionComment : "",
+        latestInspectionDate: match ? match.latestInspectionDate : "",
+        status: match ? match.status : "",
+        assignedFirst: match ? match.assignedFirst : "",
+        assignedLast: match ? match.assignedLast : "",
+        allAssignees: match ? match.allAssignees : "",
+        email: match ? match.email : "",
+        note: match ? "Matched from loaded mapping." : "No matching UID found in loaded mapping."
+      };
+
+      results.push(row);
+      renderResults();
+
+      if (match) {
+        setStatus(`Matched ${parsed.publicUid}. Inspection URL created.`, "good");
+      } else {
+        setStatus(`QR UID saved, but no matching record was found in the loaded mapping: ${parsed.publicUid}`, "bad");
+      }
+    }
+
+    function escapeHtml(value) {
+      return String(value || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function renderResults() {
+      exportBtn.disabled = results.length === 0;
+      copyInspectionBtn.disabled = !results.some(r => r.inspectionUrl);
+      clearResultsBtn.disabled = results.length === 0;
+
+      if (!results.length) {
+        resultsBody.innerHTML = '<tr><td colspan="12" class="small">No scans yet.</td></tr>';
+        return;
+      }
+
+      resultsBody.innerHTML = results.map((r, index) => {
+        const matchClass = r.matched ? "ok" : "fail";
+        const matchText = r.matched ? "matched" : "not found";
+        const inspectionLink = r.inspectionUrl
+          ? `<a href="${escapeHtml(r.inspectionUrl)}" target="_blank" rel="noopener noreferrer">Open inspection</a><br><span class="small">${escapeHtml(r.inspectionUrl)}</span>`
+          : "";
+
+        return `
+          <tr>
+            <td>${index + 1}</td>
+            <td><span class="pill ${matchClass}">${matchText}</span></td>
+            <td>${escapeHtml(r.type)}</td>
+            <td>${escapeHtml(r.makeModel)}</td>
+            <td>${escapeHtml(r.serial)}</td>
+            <td>${escapeHtml(r.barcode)}</td>
+            <td>${escapeHtml(r.managedBy)}</td>
+            <td>${escapeHtml(r.location)}</td>
+            <td>${escapeHtml(r.condition)}</td>
+            <td>${escapeHtml(r.publicUid)}</td>
+            <td class="url">${inspectionLink}</td>
+            <td class="url"><a href="${escapeHtml(r.qrUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(r.qrUrl)}</a></td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function csvEscape(value) {
+      const text = String(value ?? "");
+      return '"' + text.replaceAll('"', '""') + '"';
+    }
+
+    function exportResultsCsv() {
+      const headers = [
+        "scanNumber",
+        "scannedAt",
+        "source",
+        "matched",
+        "qrUrl",
+        "publicUid",
+        "inventoryUid",
+        "inspectionUrl",
+        "type",
+        "make",
+        "model",
+        "makeModel",
+        "serial",
+        "caseId",
+        "barcode",
+        "ownerName",
+        "ownerId",
+        "managedBy",
+        "location",
+        "condition",
+        "conditionComment",
+        "latestInspectionDate",
+        "status",
+        "assignedFirst",
+        "assignedLast",
+        "allAssignees",
+        "email",
+        "note"
+      ];
+
+      const csv = [
+        headers.join(","),
+        ...results.map(row => headers.map(h => csvEscape(row[h])).join(","))
+      ].join("\r\n");
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const link = document.createElement("a");
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+
+      link.href = URL.createObjectURL(blob);
+      link.download = `cuttime-inspection-scans-${timestamp}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    }
+
+    async function copyInspectionUrls() {
+      const urls = results
+        .map(r => r.inspectionUrl)
+        .filter(Boolean)
+        .join("\n");
+
+      if (!urls) {
+        setStatus("No inspection URLs to copy.", "bad");
+        return;
+      }
+
+      try {
+        await navigator.clipboard.writeText(urls);
+        setStatus("Inspection URLs copied.", "good");
+      } catch (err) {
+        setStatus("Could not copy automatically. Export CSV instead.", "bad");
+      }
+    }
+
+    async function startScanner() {
+      if (!("BarcodeDetector" in window)) {
+        setStatus("BarcodeDetector is not supported in this browser. Use testing/debug mode or try Chrome on Android.", "bad");
+        return;
+      }
+
+      detector = new BarcodeDetector({ formats: ["qr_code"] });
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: "environment" }
+          },
+          audio: false
+        });
+
+        video.srcObject = stream;
+        await video.play();
+
+        scanning = true;
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        setStatus("Scanning... point your camera at a QR code.");
+        scanLoop();
+      } catch (err) {
+        setStatus("Could not start camera: " + err.message, "bad");
+      }
+    }
+
+    async function scanLoop() {
+      if (!scanning) return;
+
+      try {
+        const barcodes = await detector.detect(video);
+
+        if (barcodes.length > 0) {
+          const rawValue = barcodes[0].rawValue || "";
+          const now = Date.now();
+          const lastSeen = lastScanSeenAt.get(rawValue) || 0;
+
+          if (now - lastSeen > 2500) {
+            lastScanSeenAt.set(rawValue, now);
+            await processQrText(rawValue, "camera");
+          }
+        }
+      } catch (err) {
+        // Ignore occasional detection failures.
+      }
+
+      requestAnimationFrame(scanLoop);
+    }
+
+    function stopScanner() {
+      scanning = false;
+
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+      }
+
+      video.srcObject = null;
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      setStatus("Scanner stopped.");
+    }
+
+    loadFileBtn.addEventListener("click", loadSelectedFile);
+    loadUrlBtn.addEventListener("click", loadPublishedCsvUrl);
+    reloadCacheBtn.addEventListener("click", () => loadCachedMapping().catch(err => setStatus(err.message, "bad")));
+    clearCacheBtn.addEventListener("click", () => clearCachedMapping().catch(err => setStatus(err.message, "bad")));
+
+    manualBtn.addEventListener("click", () => processQrText(manualInput.value, "manual"));
+    startBtn.addEventListener("click", startScanner);
+    stopBtn.addEventListener("click", stopScanner);
+    exportBtn.addEventListener("click", exportResultsCsv);
+    copyInspectionBtn.addEventListener("click", copyInspectionUrls);
+
+    clearResultsBtn.addEventListener("click", () => {
+      results = [];
+      lastScanSeenAt.clear();
+      renderResults();
+      setStatus("Results cleared.");
+    });
+
+    orgIdInput.addEventListener("change", () => {
+      for (const row of results) {
+        if (row.inventoryUid) {
+          row.inspectionUrl = buildInspectionUrl(row.inventoryUid);
+        }
+      }
+      renderResults();
+    });
+
+    async function init() {
+      try {
+        db = await openDb();
+        await loadCachedMapping();
+      } catch (err) {
+        setMappingStatus("Could not open local cache: " + err.message, "bad");
+      }
+
+      renderResults();
+      setStatus("Ready.");
+    }
+
+    init();
+  </script>
+</body>
+</html>
