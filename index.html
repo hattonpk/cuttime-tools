@@ -211,49 +211,87 @@
       margin: 0;
       font-weight: 500;
     }
+
+    .section-header {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .section-header h2 {
+      margin: 0;
+    }
+
+    .toggle-button {
+      width: auto;
+      min-width: 112px;
+      margin-top: 0;
+      padding: 8px 10px;
+      font-size: .9rem;
+      background: #e8eaed;
+      color: #111;
+    }
+
+    .collapsible-content.collapsed {
+      display: none;
+    }
+
+    .setup-summary {
+      margin-top: 0;
+      margin-bottom: 10px;
+    }
   </style>
 </head>
 <body>
   <main>
     <h1>CutTime QR Inspection Collector</h1>
 
-    <section class="card">
-      <h2>1. Mapping data</h2>
-
-      <div class="grid two">
-        <div>
-          <label for="mappingFile">Load CutTime export file</label>
-          <input id="mappingFile" type="file" accept=".xlsx,.csv,.tsv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/tab-separated-values">
-          <button id="loadFileBtn" class="secondary">Load Selected File</button>
-        </div>
-
-        <div>
-          <label for="csvUrl">Or load published Google Sheet CSV URL</label>
-          <input id="csvUrl" type="url" placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv">
-          <button id="loadUrlBtn" class="secondary">Load CSV From URL</button>
-        </div>
+    <section class="card" id="setupSection">
+      <div class="section-header">
+        <h2>1. Mapping data / setup</h2>
+        <button id="toggleSetupBtn" class="toggle-button" type="button">Hide setup</button>
       </div>
 
-      <div class="grid two" style="margin-top:10px;">
-        <div>
-          <label for="orgId">CutTime Org ID</label>
-          <input id="orgId" value="e3ccb7f1-6d23-4ee7-a8fb-31b3e8383c0e">
-        </div>
-        <div>
-          <label>Cached mapping</label>
-          <div id="mappingStatus" class="muted-box small">Loading cache...</div>
-        </div>
-      </div>
+      <div id="setupSummary" class="muted-box small setup-summary">Loading cache...</div>
 
-      <div class="grid two">
-        <button id="reloadCacheBtn" class="secondary">Reload Cached Mapping</button>
-        <button id="clearCacheBtn" class="danger">Clear Cached Mapping</button>
-      </div>
+      <div id="setupContent" class="collapsible-content">
+        <div class="grid two">
+          <div>
+            <label for="mappingFile">Load CutTime export file</label>
+            <input id="mappingFile" type="file" accept=".xlsx,.csv,.tsv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv,text/tab-separated-values">
+            <button id="loadFileBtn" class="secondary">Load Selected File</button>
+          </div>
 
-      <p class="small">
-        This version reads the CutTime .xlsx export directly. It also still accepts CSV/TSV and published Google Sheet CSV links.
-        The mapping is cached locally in this browser, so the full export does not need to be baked into the code.
-      </p>
+          <div>
+            <label for="csvUrl">Or load published Google Sheet CSV URL</label>
+            <input id="csvUrl" type="url" placeholder="https://docs.google.com/spreadsheets/d/e/.../pub?output=csv">
+            <button id="loadUrlBtn" class="secondary">Load CSV From URL</button>
+          </div>
+        </div>
+
+        <div class="grid two" style="margin-top:10px;">
+          <div>
+            <label for="orgId">CutTime Org ID</label>
+            <input id="orgId" value="e3ccb7f1-6d23-4ee7-a8fb-31b3e8383c0e">
+          </div>
+          <div>
+            <label>Cached mapping</label>
+            <div id="mappingStatus" class="muted-box small">Loading cache...</div>
+          </div>
+        </div>
+
+        <div class="grid two">
+          <button id="reloadCacheBtn" class="secondary">Reload Cached Mapping</button>
+          <button id="clearCacheBtn" class="danger">Clear Cached Mapping</button>
+        </div>
+
+        <p class="small">
+          This version reads the CutTime .xlsx export directly. It also still accepts CSV/TSV and published Google Sheet CSV links.
+          The mapping is cached locally in this browser, so the full export does not need to be baked into the code.
+        </p>
+      </div>
     </section>
 
     <section class="card">
@@ -351,6 +389,9 @@
     const skipDuplicates = document.getElementById("skipDuplicates");
     const resultsBody = document.getElementById("resultsBody");
     const cameraDiagnostics = document.getElementById("cameraDiagnostics");
+    const toggleSetupBtn = document.getElementById("toggleSetupBtn");
+    const setupContent = document.getElementById("setupContent");
+    const setupSummary = document.getElementById("setupSummary");
     const beepOnScan = document.getElementById("beepOnScan");
     const buzzOnScan = document.getElementById("buzzOnScan");
 
@@ -430,6 +471,19 @@
     function setMappingStatus(message, type = "") {
       mappingStatus.className = "muted-box small " + type;
       mappingStatus.textContent = message;
+      setupSummary.className = "muted-box small setup-summary " + type;
+      setupSummary.textContent = message;
+    }
+
+    function setSetupCollapsed(collapsed) {
+      setupContent.classList.toggle("collapsed", collapsed);
+      toggleSetupBtn.textContent = collapsed ? "Show setup" : "Hide setup";
+      localStorage.setItem("cuttimeSetupCollapsed", collapsed ? "1" : "0");
+    }
+
+    function initSetupCollapse() {
+      const saved = localStorage.getItem("cuttimeSetupCollapsed");
+      setSetupCollapsed(saved === "1");
     }
 
     function openDb() {
@@ -1444,6 +1498,10 @@
       setStatus("Scanner stopped.");
     }
 
+    toggleSetupBtn.addEventListener("click", () => {
+      setSetupCollapsed(!setupContent.classList.contains("collapsed"));
+    });
+
     loadFileBtn.addEventListener("click", loadSelectedFile);
     loadUrlBtn.addEventListener("click", loadPublishedCsvUrl);
     reloadCacheBtn.addEventListener("click", () => loadCachedMapping().catch(err => setStatus(err.message, "bad")));
@@ -1475,6 +1533,8 @@
     });
 
     async function init() {
+      initSetupCollapse();
+
       try {
         db = await openDb();
         await loadCachedMapping();
