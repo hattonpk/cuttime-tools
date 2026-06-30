@@ -271,7 +271,18 @@
       <textarea id="manualInput" placeholder="Paste a CutTime QR URL here, then tap Process Pasted URL..."></textarea>
       <button id="manualBtn" class="secondary">Process Pasted URL</button>
 
+      <div class="checkbox-row">
+        <input type="checkbox" id="beepOnScan" checked>
+        <label for="beepOnScan">Beep when a QR code is accepted</label>
+      </div>
+
+      <div class="checkbox-row">
+        <input type="checkbox" id="buzzOnScan" checked>
+        <label for="buzzOnScan">Vibrate/buzz when a QR code is accepted</label>
+      </div>
+
       <div id="status" class="status">Ready.</div>
+      <div id="cameraDiagnostics" class="muted-box small" style="margin-top:10px;">Camera diagnostics will appear here after you tap Start Scanner.</div>
     </section>
 
     <section class="card">
@@ -339,6 +350,9 @@
     const clearResultsBtn = document.getElementById("clearResultsBtn");
     const skipDuplicates = document.getElementById("skipDuplicates");
     const resultsBody = document.getElementById("resultsBody");
+    const cameraDiagnostics = document.getElementById("cameraDiagnostics");
+    const beepOnScan = document.getElementById("beepOnScan");
+    const buzzOnScan = document.getElementById("buzzOnScan");
 
     let db = null;
     let uidMap = new Map();
@@ -347,6 +361,66 @@
     let detector = null;
     let scanning = false;
     let lastScanSeenAt = new Map();
+    let audioContext = null;
+
+    async function prepareAudioFeedback() {
+      if (!audioContext) {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return null;
+        audioContext = new AudioContextClass();
+      }
+
+      if (audioContext.state === "suspended") {
+        await audioContext.resume();
+      }
+
+      return audioContext;
+    }
+
+    async function playSuccessBeep() {
+      if (!beepOnScan || !beepOnScan.checked) return;
+
+      try {
+        const ctx = await prepareAudioFeedback();
+        if (!ctx) return;
+
+        const oscillator = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const now = ctx.currentTime;
+
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(880, now);
+
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.12, now + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+
+        oscillator.connect(gain);
+        gain.connect(ctx.destination);
+
+        oscillator.start(now);
+        oscillator.stop(now + 0.15);
+      } catch (err) {
+        // Audio feedback is optional; ignore failures.
+      }
+    }
+
+    function buzzSuccess() {
+      if (!buzzOnScan || !buzzOnScan.checked) return;
+
+      try {
+        if ("vibrate" in navigator) {
+          navigator.vibrate([80]);
+        }
+      } catch (err) {
+        // Vibration feedback is optional; ignore failures.
+      }
+    }
+
+    function successFeedback() {
+      buzzSuccess();
+      playSuccessBeep();
+    }
 
     function setStatus(message, type = "") {
       statusEl.className = "status " + type;
@@ -1071,12 +1145,12 @@
 
       if (!parsed.ok) {
         setStatus(parsed.error, "bad");
-        return;
+        return false;
       }
 
       if (skipDuplicates.checked && results.some(r => r.publicUid === parsed.publicUid)) {
         setStatus("Duplicate skipped: " + parsed.publicUid, "bad");
-        return;
+        return false;
       }
 
       const match = uidMap.get(parsed.publicUid) || null;
@@ -1115,12 +1189,15 @@
 
       results.push(row);
       renderResults();
+      successFeedback();
 
       if (match) {
         setStatus(`Matched ${parsed.publicUid}. Inspection URL created.`, "good");
       } else {
         setStatus(`QR UID saved, but no matching record was found in the loaded mapping: ${parsed.publicUid}`, "bad");
       }
+
+      return true;
     }
 
     function escapeHtml(value) {
@@ -1242,21 +1319,78 @@
       }
     }
 
+    function updateCameraDiagnostics(extra = "") {
+      const lines = [
+        `Page URL protocol: ${location.protocol}`,
+        `Secure context: ${window.isSecureContext ? "yes" : "no"}`,
+        `mediaDevices available: ${navigator.mediaDevices ? "yes" : "no"}`,
+        `getUserMedia available: ${navigator.mediaDevices && navigator.mediaDevices.getUserMedia ? "yes" : "no"}`,
+        `BarcodeDetector available: ${"BarcodeDetector" in window ? "yes" : "no"}`,
+        `User agent: ${navigator.userAgent}`
+      ];
+
+      if (extra) {
+        lines.unshift(extra);
+      }
+
+      cameraDiagnostics.textContent = lines.join("\n");
+    }
+
+    function permissionDeniedHelp(err) {
+      return [
+        "Could not start camera: " + (err && err.message ? err.message : err.name || "Permission denied"),
+        "",
+        "Most likely fixes:",
+        "1. Android Settings > Apps > Chrome > Permissions > Camera > Allow.",
+        "2. Chrome > ⋮ > Settings > Site settings > Camera > make sure Camera is on and this page is not blocked.",
+        "3. If you opened this from Downloads/files, try hosting the HTML on an HTTPS page instead. Camera access is much more reliable from https:// than from a local file/content URL.",
+        "4. Close other apps that may be using the camera, then reopen Chrome."
+      ].join("\n");
+    }
+
     async function startScanner() {
+      prepareAudioFeedback();
+      updateCameraDiagnostics("Checking camera support...");
+
       if (!("BarcodeDetector" in window)) {
         setStatus("BarcodeDetector is not supported in this browser. Use testing/debug mode or try Chrome on Android.", "bad");
+        return;
+      }
+
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setStatus("Camera access is not available in this page context. Try opening the app from an HTTPS URL.", "bad");
+        updateCameraDiagnostics("Camera API is unavailable in this page context.");
+        return;
+      }
+
+      if (!window.isSecureContext) {
+        setStatus("Camera access requires a secure context. Open this app from HTTPS, localhost, or another trusted context.", "bad");
+        updateCameraDiagnostics("This page is not a secure context, so Chrome will not allow camera access.");
         return;
       }
 
       detector = new BarcodeDetector({ formats: ["qr_code"] });
 
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: "environment" }
-          },
-          audio: false
-        });
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: { ideal: "environment" }
+            },
+            audio: false
+          });
+        } catch (firstErr) {
+          // Fallback to the simplest possible camera request.
+          // This helps on devices/browsers that dislike facingMode constraints.
+          if (firstErr && (firstErr.name === "OverconstrainedError" || firstErr.name === "NotFoundError")) {
+            stream = await navigator.mediaDevices.getUserMedia({
+              video: true,
+              audio: false
+            });
+          } else {
+            throw firstErr;
+          }
+        }
 
         video.srcObject = stream;
         await video.play();
@@ -1264,10 +1398,12 @@
         scanning = true;
         startBtn.disabled = true;
         stopBtn.disabled = false;
+        updateCameraDiagnostics("Camera started successfully.");
         setStatus("Scanning... point your camera at a QR code.");
         scanLoop();
       } catch (err) {
-        setStatus("Could not start camera: " + err.message, "bad");
+        updateCameraDiagnostics(permissionDeniedHelp(err));
+        setStatus("Could not start camera: " + (err && err.message ? err.message : err.name || "Permission denied"), "bad");
       }
     }
 
@@ -1313,7 +1449,10 @@
     reloadCacheBtn.addEventListener("click", () => loadCachedMapping().catch(err => setStatus(err.message, "bad")));
     clearCacheBtn.addEventListener("click", () => clearCachedMapping().catch(err => setStatus(err.message, "bad")));
 
-    manualBtn.addEventListener("click", () => processQrText(manualInput.value, "manual"));
+    manualBtn.addEventListener("click", () => {
+      prepareAudioFeedback();
+      processQrText(manualInput.value, "manual");
+    });
     startBtn.addEventListener("click", startScanner);
     stopBtn.addEventListener("click", stopScanner);
     exportBtn.addEventListener("click", exportResultsCsv);
