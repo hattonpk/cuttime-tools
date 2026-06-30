@@ -358,7 +358,8 @@
       <h2>3. Results</h2>
 
       <div class="grid three">
-        <button id="exportBtn" class="secondary" disabled>Export Results CSV</button>
+        <button id="exportTableBtn" class="secondary" disabled>Export Results Table CSV</button>
+        <button id="exportBtn" class="secondary" disabled>Export Full Results CSV</button>
         <button id="copyInspectionBtn" class="secondary" disabled>Copy Inspection URLs</button>
         <button id="clearResultsBtn" class="danger" disabled>Clear Results</button>
       </div>
@@ -395,7 +396,7 @@
   </main>
 
   <script>
-    const APP_VERSION = "1.6.0";
+    const APP_VERSION = "1.6.1";
     const APP_RELEASE = "2026-06-30";
     const CACHE_FORMAT_VERSION = "cuttime-export-map-v1";
 
@@ -420,6 +421,7 @@
     const orgIdInput = document.getElementById("orgId");
     const manualInput = document.getElementById("manualInput");
     const manualBtn = document.getElementById("manualBtn");
+    const exportTableBtn = document.getElementById("exportTableBtn");
     const exportBtn = document.getElementById("exportBtn");
     const copyInspectionBtn = document.getElementById("copyInspectionBtn");
     const clearResultsBtn = document.getElementById("clearResultsBtn");
@@ -1397,6 +1399,7 @@
     }
 
     function renderResults() {
+      exportTableBtn.disabled = results.length === 0;
       exportBtn.disabled = results.length === 0;
       copyInspectionBtn.disabled = !results.some(r => r.inspectionUrl);
       clearResultsBtn.disabled = results.length === 0;
@@ -1435,6 +1438,58 @@
     function csvEscape(value) {
       const text = String(value ?? "");
       return '"' + text.replaceAll('"', '""') + '"';
+    }
+
+    function downloadCsv(csv, filename) {
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const link = document.createElement("a");
+
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    }
+
+    function exportResultsTableCsv() {
+      const headers = [
+        "scanNumber",
+        "match",
+        "type",
+        "makeModel",
+        "serial",
+        "barcode",
+        "managedBy",
+        "location",
+        "condition",
+        "publicUid",
+        "inspectionUrl",
+        "qrUrl"
+      ];
+
+      const csv = [
+        headers.join(","),
+        ...results.map(row => [
+          row.scanNumber,
+          row.matched ? "matched" : "not found",
+          row.type,
+          row.makeModel,
+          row.serial,
+          row.barcode,
+          row.managedBy,
+          row.location,
+          row.condition,
+          row.publicUid,
+          row.inspectionUrl,
+          row.qrUrl
+        ].map(csvEscape).join(","))
+      ].join("\r\n");
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      downloadCsv(csv, `cuttime-results-table-v${APP_VERSION}-${timestamp}.csv`);
+      setStatus("Results table exported.", "good");
     }
 
     function exportResultsCsv() {
@@ -1476,17 +1531,9 @@
         ...results.map(row => headers.map(h => csvEscape(row[h])).join(","))
       ].join("\r\n");
 
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-      const link = document.createElement("a");
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-
-      link.href = URL.createObjectURL(blob);
-      link.download = `cuttime-inspection-scans-v${APP_VERSION}-${timestamp}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-
-      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+      downloadCsv(csv, `cuttime-inspection-scans-v${APP_VERSION}-${timestamp}.csv`);
+      setStatus("Full results exported.", "good");
     }
 
     async function copyInspectionUrls() {
@@ -1649,6 +1696,7 @@
     });
     startBtn.addEventListener("click", startScanner);
     stopBtn.addEventListener("click", stopScanner);
+    exportTableBtn.addEventListener("click", exportResultsTableCsv);
     exportBtn.addEventListener("click", exportResultsCsv);
     copyInspectionBtn.addEventListener("click", copyInspectionUrls);
 
